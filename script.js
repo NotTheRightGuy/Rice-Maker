@@ -39,17 +39,19 @@ document.getElementById("selectElement").addEventListener("click", async () => {
     }
 });
 
-// Add message listener for selected element
+// Show/hide remove button along with element info
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "elementSelected") {
         const details = document.getElementById("elementDetails");
         const info = document.getElementById("selectedInfo");
         const imageControl = document.getElementById("imageControl");
+        const removeButton = document.getElementById("removeElement");
 
         details.textContent = `${message.tagName.toLowerCase()}${
             message.id ? "#" + message.id : ""
         }${message.className ? "." + message.className : ""}`;
         info.style.display = "block";
+        removeButton.style.display = "inline-block";
 
         // Show image control only for img elements
         imageControl.style.display =
@@ -62,6 +64,44 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         };
     }
 });
+
+// Add remove element handler
+document.getElementById("removeElement").addEventListener("click", async () => {
+    const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+    });
+
+    try {
+        await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            function: removeSelectedElement,
+        });
+
+        // Reset UI after removal
+        document.getElementById("selectedInfo").style.display = "none";
+        document.getElementById("removeElement").style.display = "none";
+        document.getElementById("imageControl").style.display = "none";
+    } catch (err) {
+        console.error("Failed to remove element:", err);
+    }
+});
+
+function removeSelectedElement() {
+    if (window.selectedElement) {
+        const selector = generateSelector(window.selectedElement);
+
+        // Remove element from DOM
+        window.selectedElement.remove();
+
+        // Remove stored styles for the element
+        chrome.storage.local.get(["elementStyles"], (result) => {
+            let storedStyles = result.elementStyles || {};
+            delete storedStyles[selector];
+            chrome.storage.local.set({ elementStyles: storedStyles });
+        });
+    }
+}
 
 function enableElementSelection() {
     document.body.style.cursor = "crosshair";
